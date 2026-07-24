@@ -1,0 +1,92 @@
+# ==========================================================
+# MVRAG AI
+# Production .gitignore
+# ==========================================================
+
+# --------------------------
+# Python
+# --------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --------------------------
+# Virtual Environment
+# --------------------------
+.venv/
+venv/
+env/
+
+# --------------------------
+# Environment Variables
+# --------------------------
+.env
+
+# --------------------------
+# IDE
+# --------------------------
+.vscode/
+.idea/
+
+# --------------------------
+# Logs
+# --------------------------
+logs/
+*.log
+
+# --------------------------
+# Testing
+# --------------------------
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --------------------------
+# Build
+# --------------------------
+build/
+dist/
+*.egg-info/
+
+# --------------------------
+# OS
+# --------------------------
+.DS_Store
+Thumbs.db
+
+# --------------------------
+# Vector Database
+# --------------------------
+vector_db/
+
+# --------------------------
+# SQLite
+# --------------------------
+database/*.db
+database/*.sqlite3
+
+# --------------------------
+# Generated Data
+# --------------------------
+data/audio/*
+data/frames/*
+data/keyframes/*
+data/transcripts/*
+data/captions/*
+data/ocr/*
+data/processed_chunks/*
+
+# Keep folder structure
+!data/audio/.gitkeep
+!data/frames/.gitkeep
+!data/keyframes/.gitkeep
+!data/transcripts/.gitkeep
+!data/captions/.gitkeep
+!data/ocr/.gitkeep
+!data/processed_chunks/.gitkeep
+
+# --------------------------
+# Models & Cache
+# --------------------------
+.cache/
+models/
