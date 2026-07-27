@@ -18,17 +18,21 @@ class FrameExtractor:
     """
     Extracts frames from a video at a fixed interval.
     """
-def __init__(
-    self,
-    interval_seconds: int | None = None,
-):
-    self.interval_seconds = (
-        interval_seconds
-        if interval_seconds is not None
-        else settings.FRAME_INTERVAL_SECONDS
-    )
 
-    def extract(self, video_path: str | Path) -> list[Path]:
+    def __init__(
+        self,
+        interval_seconds: int | None = None,
+    ):
+        self.interval_seconds = (
+            interval_seconds
+            if interval_seconds is not None
+            else settings.FRAME_INTERVAL_SECONDS
+        )
+
+    def extract(
+        self,
+        video_path: str | Path,
+    ) -> list[Path]:
 
         video_path = Path(video_path)
 
