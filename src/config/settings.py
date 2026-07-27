@@ -86,6 +86,7 @@ class Settings(BaseSettings):
     WHISPER_MODEL: str
     OCR_LANGUAGE: str
     IMAGE_CAPTION_MODEL: str
+    FRAME_INTERVAL_SECONDS: int = 10
 
     # -------------------------------------------------------------------------
     # LLM
