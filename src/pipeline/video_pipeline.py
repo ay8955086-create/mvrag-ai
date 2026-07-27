@@ -11,11 +11,15 @@ from pathlib import Path
 from src.core.logger import get_logger
 from src.utils.video_metadata import extract_video_metadata
 
+from src.models.frame_info import FrameInfo
+
 from src.processors.audio.audio_extractor import AudioExtractor
 from src.processors.whisper.transcriber import WhisperTranscriber
 from src.processors.frames.frame_extractor import FrameExtractor
 from src.processors.ocr.ocr_processor import OCRProcessor
 from src.processors.caption.caption_generator import CaptionGenerator
+from src.processors.chunking.chunk_generator import ChunkGenerator
+
 logger = get_logger(__name__)
 
 
@@ -30,10 +34,16 @@ class VideoPipeline:
         """
 
         self.audio_extractor = AudioExtractor()
+
         self.whisper = WhisperTranscriber()
+
         self.frame_extractor = FrameExtractor()
+
         self.ocr_processor = OCRProcessor()
+
         self.caption_generator = CaptionGenerator()
+
+        self.chunk_generator = ChunkGenerator()
 
         logger.info("VideoPipeline initialized.")
 
@@ -64,19 +74,19 @@ class VideoPipeline:
         metadata = self.extract_metadata(video_path)
 
         # ------------------------------------------------------
-        # Step 2 : Audio Extraction
+        # Step 2 : Audio
         # ------------------------------------------------------
 
         audio_path = self.extract_audio(video_path)
 
         # ------------------------------------------------------
-        # Step 3 : Whisper Transcription
+        # Step 3 : Whisper
         # ------------------------------------------------------
 
         transcript = self.transcribe(audio_path)
 
         # ------------------------------------------------------
-        # Step 4 : Frame Extraction
+        # Step 4 : Frames
         # ------------------------------------------------------
 
         frames = self.extract_frames(video_path)
@@ -88,10 +98,20 @@ class VideoPipeline:
         ocr_results = self.extract_ocr(frames)
 
         # ------------------------------------------------------
-        # Step 6 : BLIP Caption Generation
+        # Step 6 : BLIP
         # ------------------------------------------------------
 
         captions = self.generate_captions(frames)
+
+        # ------------------------------------------------------
+        # Step 7 : Semantic Chunk Generation
+        # ------------------------------------------------------
+
+        chunks = self.generate_chunks(
+            transcript,
+            ocr_results,
+            captions,
+        )
 
         logger.info("=" * 60)
         logger.info("Video processing completed successfully.")
@@ -103,9 +123,10 @@ class VideoPipeline:
             "frames": frames,
             "ocr": ocr_results,
             "captions": captions,
+            "chunks": chunks,
         }
 
-    # ==========================================================
+        # ==========================================================
     # Metadata Extraction
     # ==========================================================
 
@@ -152,7 +173,10 @@ class VideoPipeline:
 
         logger.info("Audio extraction completed.")
 
-        logger.info("Audio saved at : %s", audio_path)
+        logger.info(
+            "Audio saved at : %s",
+            audio_path,
+        )
 
         return audio_path
 
@@ -176,12 +200,20 @@ class VideoPipeline:
 
         logger.info(
             "Detected Language : %s",
-            result.get("language", "unknown"),
+            result.get(
+                "language",
+                "unknown",
+            ),
         )
 
         logger.info(
             "Transcript Segments : %d",
-            len(result.get("segments", [])),
+            len(
+                result.get(
+                    "segments",
+                    [],
+                )
+            ),
         )
 
         return result
@@ -193,14 +225,16 @@ class VideoPipeline:
     def extract_frames(
         self,
         video_path: Path,
-    ) -> list[Path]:
+    ) -> list[FrameInfo]:
         """
         Extract frames from the uploaded video.
         """
 
         logger.info("Frame extraction started.")
 
-        frames = self.frame_extractor.extract(video_path)
+        frames = self.frame_extractor.extract(
+            video_path,
+        )
 
         logger.info("Frame extraction completed.")
 
@@ -211,13 +245,13 @@ class VideoPipeline:
 
         return frames
 
-    # ==========================================================
+        # ==========================================================
     # OCR
     # ==========================================================
 
     def extract_ocr(
         self,
-        frames: list[Path],
+        frames: list[FrameInfo],
     ) -> list[dict]:
         """
         Run OCR on all extracted frames.
@@ -227,13 +261,16 @@ class VideoPipeline:
 
         results = []
 
-        for frame in frames:
+        for frame_info in frames:
 
-            result = self.ocr_processor.extract_text(frame)
+            result = self.ocr_processor.extract_text(
+                frame_info.frame,
+            )
 
             results.append(
                 {
-                    "frame": frame,
+                    "frame": frame_info.frame,
+                    "timestamp": frame_info.timestamp,
                     "text": result["text"],
                     "confidence": result["confidence"],
                 }
@@ -254,7 +291,7 @@ class VideoPipeline:
 
     def generate_captions(
         self,
-        frames: list[Path],
+        frames: list[FrameInfo],
     ) -> list[dict]:
         """
         Generate captions for all extracted frames.
@@ -264,13 +301,16 @@ class VideoPipeline:
 
         captions = []
 
-        for frame in frames:
+        for frame_info in frames:
 
-            caption = self.caption_generator.generate_caption(frame)
+            caption = self.caption_generator.generate_caption(
+                frame_info.frame,
+            )
 
             captions.append(
                 {
-                    "frame": frame,
+                    "frame": frame_info.frame,
+                    "timestamp": frame_info.timestamp,
                     "caption": caption,
                 }
             )
@@ -283,3 +323,34 @@ class VideoPipeline:
         )
 
         return captions
+
+    # ==========================================================
+    # Semantic Chunk Generation
+    # ==========================================================
+
+    def generate_chunks(
+        self,
+        transcript: dict,
+        ocr_results: list[dict],
+        captions: list[dict],
+    ):
+        """
+        Generate semantic chunks.
+        """
+
+        logger.info("Semantic chunk generation started.")
+
+        chunks = self.chunk_generator.generate_chunks(
+            transcript_segments=transcript["segments"],
+            ocr_results=ocr_results,
+            captions=captions,
+        )
+
+        logger.info("Semantic chunk generation completed.")
+
+        logger.info(
+            "Generated %d semantic chunks.",
+            len(chunks),
+        )
+
+        return chunks

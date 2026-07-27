@@ -10,13 +10,14 @@ import cv2
 
 from src.config.settings import settings
 from src.core.logger import get_logger
+from src.models.frame_info import FrameInfo
 
 logger = get_logger(__name__)
 
 
 class FrameExtractor:
     """
-    Extracts frames from a video at a fixed interval.
+    Extracts frames from a video at a configurable interval.
     """
 
     def __init__(
@@ -32,7 +33,20 @@ class FrameExtractor:
     def extract(
         self,
         video_path: str | Path,
-    ) -> list[Path]:
+    ) -> list[FrameInfo]:
+        """
+        Extract frames from a video.
+
+        Parameters
+        ----------
+        video_path : str | Path
+            Path to the input video.
+
+        Returns
+        -------
+        list[FrameInfo]
+            Extracted frame information including timestamps.
+        """
 
         video_path = Path(video_path)
 
@@ -40,12 +54,17 @@ class FrameExtractor:
             raise FileNotFoundError(video_path)
 
         output_dir = settings.frames_dir / video_path.stem
-        output_dir.mkdir(parents=True, exist_ok=True)
+        output_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
 
         capture = cv2.VideoCapture(str(video_path))
 
         if not capture.isOpened():
-            raise RuntimeError("Unable to open video.")
+            raise RuntimeError(
+                f"Unable to open video: {video_path}"
+            )
 
         fps = capture.get(cv2.CAP_PROP_FPS)
 
@@ -54,12 +73,15 @@ class FrameExtractor:
 
         frame_interval = int(fps * self.interval_seconds)
 
-        saved_frames = []
+        extracted_frames: list[FrameInfo] = []
 
         frame_number = 0
         saved = 0
 
-        logger.info("Extracting frames from %s", video_path.name)
+        logger.info(
+            "Extracting frames from %s",
+            video_path.name,
+        )
 
         while True:
 
@@ -70,13 +92,30 @@ class FrameExtractor:
 
             if frame_number % frame_interval == 0:
 
-                filename = output_dir / f"frame_{saved:05d}.jpg"
+                timestamp = frame_number / fps
 
-                frame = cv2.resize(frame, (960, 540))
+                filename = (
+                    output_dir
+                    / f"frame_{saved:05d}.jpg"
+                )
 
-                cv2.imwrite(str(filename), frame)
+                # Resize for faster OCR & BLIP
+                frame = cv2.resize(
+                    frame,
+                    (960, 540),
+                )
 
-                saved_frames.append(filename)
+                cv2.imwrite(
+                    str(filename),
+                    frame,
+                )
+
+                extracted_frames.append(
+                    FrameInfo(
+                        frame=filename,
+                        timestamp=round(timestamp, 2),
+                    )
+                )
 
                 saved += 1
 
@@ -84,6 +123,9 @@ class FrameExtractor:
 
         capture.release()
 
-        logger.info("Extracted %d frames.", len(saved_frames))
+        logger.info(
+            "Extracted %d frames.",
+            len(extracted_frames),
+        )
 
-        return saved_frames
+        return extracted_frames
