@@ -72,6 +72,8 @@ class FrameExtractor:
 
                 filename = output_dir / f"frame_{saved:05d}.jpg"
 
+                frame = cv2.resize(frame, (960, 540))
+
                 cv2.imwrite(str(filename), frame)
 
                 saved_frames.append(filename)
