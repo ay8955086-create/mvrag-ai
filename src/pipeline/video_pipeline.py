@@ -1,12 +1,14 @@
 """
-Main processing pipeline for MVRAG AI.
-
-This module orchestrates the complete video processing workflow.
+Main processing pipeline...
 """
 
 from __future__ import annotations
 
+from uuid import uuid4
 from pathlib import Path
+
+from src.embeddings.embedding_generator import EmbeddingGenerator
+from src.embeddings.chroma_store import ChromaStore
 
 from src.core.logger import get_logger
 from src.utils.video_metadata import extract_video_metadata
@@ -44,6 +46,10 @@ class VideoPipeline:
         self.caption_generator = CaptionGenerator()
 
         self.chunk_generator = ChunkGenerator()
+
+        self.embedding_generator = EmbeddingGenerator()
+
+        self.chroma_store = ChromaStore()
 
         logger.info("VideoPipeline initialized.")
 
@@ -113,6 +119,8 @@ class VideoPipeline:
             captions,
         )
 
+        stored_chunks = self.store_embeddings(chunks)
+
         logger.info("=" * 60)
         logger.info("Video processing completed successfully.")
 
@@ -123,7 +131,7 @@ class VideoPipeline:
             "frames": frames,
             "ocr": ocr_results,
             "captions": captions,
-            "chunks": chunks,
+            "chunks": stored_chunks,
         }
 
         # ==========================================================
@@ -354,3 +362,40 @@ class VideoPipeline:
         )
 
         return chunks
+
+    def store_embeddings(
+    self,
+    chunks,
+):
+
+
+       logger.info("Embedding generation started.")
+
+       for chunk in chunks:
+
+        embedding = self.embedding_generator.generate_embedding(
+            chunk.combined_text,
+        )
+
+        embedding_id = str(uuid4())
+
+        self.chroma_store.add_embedding(
+            embedding_id=embedding_id,
+            embedding=embedding,
+            document=chunk.combined_text,
+            metadata={
+                "chunk_index": chunk.chunk_index,
+                "start_time": chunk.start_time,
+                "end_time": chunk.end_time,
+            },
+        )
+
+        # Store the generated ID in the chunk object
+        if hasattr(chunk, "embedding_id"):
+            chunk.embedding_id = embedding_id
+
+        logger.info(
+        "Stored %d embeddings in ChromaDB.",
+            len(chunks),
+       )
+       return chunks
