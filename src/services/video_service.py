@@ -167,3 +167,83 @@ class VideoService:
         )
 
         return video
+    
+    @staticmethod
+    def get_all_videos(
+        db: Session,
+    ) -> list[Video]:
+        """
+        Return all uploaded videos.
+        """
+
+        logger.info("Fetching all videos.")
+
+        return (
+            db.query(Video)
+            .order_by(Video.upload_time.desc())
+            .all()
+        )
+
+    @staticmethod
+    def get_video(
+        db: Session,
+        video_id: int,
+    ) -> Video:
+        """
+        Return one video.
+        """
+
+        video = db.get(
+            Video,
+            video_id,
+        )
+
+        if video is None:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Video not found.",
+            )
+
+        return video
+
+    @staticmethod
+    def delete_video(
+        db: Session,
+        video_id: int,
+    ) -> dict:
+        """
+        Delete a video.
+        """
+
+        video = db.get(
+            Video,
+            video_id,
+        )
+
+        if video is None:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Video not found.",
+            )
+
+        video_path = (
+            settings.raw_video_dir
+            / video.filename
+        )
+
+        if video_path.exists():
+            video_path.unlink()
+
+        db.delete(video)
+        db.commit()
+
+        logger.info(
+            "Video %d deleted.",
+            video_id,
+        )
+
+        return {
+            "message": "Video deleted successfully."
+        }

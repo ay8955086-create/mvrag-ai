@@ -32,3 +32,39 @@ def upload_video(
         title=title,
         description=description,
     )
+@router.get(
+    "",
+    response_model=list[VideoResponse],
+)
+def list_videos(
+    db: Session = Depends(get_db),
+):
+
+    return VideoService.get_all_videos(
+        db,
+    )
+@router.get(
+    "/{video_id}",
+    response_model=VideoResponse,
+)
+def get_video(
+    video_id: int,
+    db: Session = Depends(get_db),
+):
+
+    return VideoService.get_video(
+        db,
+        video_id,
+    )
+@router.delete(
+    "/{video_id}",
+)
+def delete_video(
+    video_id: int,
+    db: Session = Depends(get_db),
+):
+
+    return VideoService.delete_video(
+        db,
+        video_id,
+    )

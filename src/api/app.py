@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.api.routers.upload import router as upload_router
 from src.api.routers.query import router as query_router
 from src.api.routers.health import router as health_router
+from src.api.routers.analytics import router as analytics_router
 
 from src.config.settings import settings
 from src.core.logger import get_logger
@@ -65,6 +66,7 @@ app = FastAPI(
 app.include_router(upload_router)
 app.include_router(query_router)
 app.include_router(health_router)
+app.include_router(analytics_router)
 
 # ------------------------------------------------------------
 # CORS
