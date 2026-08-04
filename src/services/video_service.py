@@ -1,16 +1,24 @@
+"""
+Video service for MVRAG AI.
+"""
+
 from __future__ import annotations
 
 import shutil
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from src.config.settings import settings
+from src.core.logger import get_logger
 from src.models.video import Video
+from src.pipeline.video_pipeline import VideoPipeline
 from src.utils.video_metadata import extract_video_metadata
+
+logger = get_logger(__name__)
 
 
 class VideoService:
@@ -18,7 +26,12 @@ class VideoService:
     Handles all video upload operations.
     """
 
-    ALLOWED_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv"}
+    ALLOWED_EXTENSIONS = {
+        ".mp4",
+        ".avi",
+        ".mov",
+        ".mkv",
+    }
 
     @staticmethod
     def upload_video(
@@ -28,8 +41,13 @@ class VideoService:
         description: str | None = None,
     ) -> Video:
         """
-        Save a video, extract metadata, and create a database record.
+        Upload a video, process it through the AI pipeline,
+        and store its metadata.
         """
+
+        # ----------------------------------------------------------
+        # Validate file extension
+        # ----------------------------------------------------------
 
         extension = Path(file.filename).suffix.lower()
 
@@ -39,14 +57,36 @@ class VideoService:
                 detail="Unsupported video format.",
             )
 
+        # ----------------------------------------------------------
+        # Save uploaded file
+        # ----------------------------------------------------------
+
         unique_filename = f"{uuid.uuid4()}{extension}"
 
         save_path = settings.raw_video_dir / unique_filename
 
-        with save_path.open("wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        logger.info(
+            "Saving uploaded video to %s",
+            save_path,
+        )
 
-        metadata = extract_video_metadata(str(save_path))
+        with save_path.open("wb") as buffer:
+            shutil.copyfileobj(
+                file.file,
+                buffer,
+            )
+
+        # ----------------------------------------------------------
+        # Extract metadata
+        # ----------------------------------------------------------
+
+        metadata = extract_video_metadata(
+            str(save_path),
+        )
+
+        # ----------------------------------------------------------
+        # Create database record
+        # ----------------------------------------------------------
 
         video = Video(
             filename=unique_filename,
@@ -59,12 +99,71 @@ class VideoService:
             height=metadata["height"],
             size_mb=metadata["size_mb"],
 
-            status="Pending",
+            status="Processing",
             upload_time=datetime.now(UTC),
         )
 
         db.add(video)
         db.commit()
         db.refresh(video)
+
+        logger.info(
+            "Video record created with ID %d",
+            video.id,
+        )
+
+        # ----------------------------------------------------------
+        # Run AI Pipeline
+        # ----------------------------------------------------------
+
+        pipeline = VideoPipeline()
+
+        try:
+
+            logger.info(
+                "Starting AI pipeline..."
+            )
+
+            pipeline_result = pipeline.process(
+                save_path,
+            )
+
+            # Reserved for future use:
+            # transcript
+            # OCR
+            # captions
+            # chunks
+            # embeddings
+
+            _ = pipeline_result
+
+            video.status = "Completed"
+
+            logger.info(
+                "AI pipeline completed successfully."
+            )
+
+        except Exception:
+
+            logger.exception(
+                "Pipeline processing failed."
+            )
+
+            video.status = "Failed"
+
+            db.commit()
+
+            raise
+
+        # ----------------------------------------------------------
+        # Update status
+        # ----------------------------------------------------------
+
+        db.commit()
+        db.refresh(video)
+
+        logger.info(
+            "Video processing finished."
+        )
 
         return video
