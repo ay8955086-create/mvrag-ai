@@ -4,13 +4,17 @@ FastAPI application for MVRAG AI.
 
 from __future__ import annotations
 
-import src.models
-
 from contextlib import asynccontextmanager
+
+import src.models
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from src.api.routes.video import router as video_router
+
+from src.api.routers.upload import router as upload_router
+from src.api.routers.query import router as query_router
+from src.api.routers.health import router as health_router
+
 from src.config.settings import settings
 from src.core.logger import get_logger
 from src.database.init_db import (
@@ -53,7 +57,14 @@ app = FastAPI(
     debug=settings.DEBUG,
     lifespan=lifespan,
 )
-app.include_router(video_router)
+
+# ------------------------------------------------------------
+# Routers
+# ------------------------------------------------------------
+
+app.include_router(upload_router)
+app.include_router(query_router)
+app.include_router(health_router)
 
 # ------------------------------------------------------------
 # CORS
@@ -67,27 +78,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # ------------------------------------------------------------
-# Root Endpoint
+# Root
 # ------------------------------------------------------------
 
 @app.get("/", tags=["Root"])
 async def root():
+
     return {
         "application": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "status": "running",
-    }
-
-
-# ------------------------------------------------------------
-# Health Endpoint
-# ------------------------------------------------------------
-
-@app.get("/health", tags=["Health"])
-async def health():
-    return {
-        "status": "healthy",
-        "database": "connected",
     }
