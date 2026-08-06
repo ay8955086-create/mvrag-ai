@@ -21,9 +21,6 @@ from src.processors.frames.frame_extractor import FrameExtractor
 from src.processors.ocr.ocr_processor import OCRProcessor
 from src.processors.caption.caption_generator import CaptionGenerator
 from src.processors.chunking.chunk_generator import ChunkGenerator
-from sqlalchemy.orm import Session
-
-from src.models.processing_status import ProcessingStatus
 
 logger = get_logger(__name__)
 
@@ -33,17 +30,10 @@ class VideoPipeline:
     Executes the complete AI pipeline for one uploaded video.
     """
 
-    def __init__(
-    self,
-    db: Session,
-    video_id: int,
-):
+    def __init__(self):
         """
         Initialize all pipeline components.
         """
-        self.db = db
-
-        self.video_id = video_id
 
         self.audio_extractor = AudioExtractor()
 
@@ -67,15 +57,13 @@ class VideoPipeline:
     # Main Pipeline
     # ==========================================================
 
-def process(
-    self,
-    video_path: str | Path,
-) -> dict:
-    """
-    Execute the complete processing pipeline.
-    """
-
-    try:
+    def process(
+        self,
+        video_path: str | Path,
+    ) -> dict:
+        """
+        Execute the complete processing pipeline.
+        """
 
         video_path = Path(video_path)
 
@@ -89,23 +77,11 @@ def process(
         # Step 1 : Metadata
         # ------------------------------------------------------
 
-        self._update_progress(
-            "Processing",
-            "Extracting Metadata",
-            10,
-        )
-
         metadata = self.extract_metadata(video_path)
 
         # ------------------------------------------------------
         # Step 2 : Audio
         # ------------------------------------------------------
-
-        self._update_progress(
-            "Processing",
-            "Extracting Audio",
-            20,
-        )
 
         audio_path = self.extract_audio(video_path)
 
@@ -113,23 +89,11 @@ def process(
         # Step 3 : Whisper
         # ------------------------------------------------------
 
-        self._update_progress(
-            "Processing",
-            "Running Whisper",
-            35,
-        )
-
         transcript = self.transcribe(audio_path)
 
         # ------------------------------------------------------
         # Step 4 : Frames
         # ------------------------------------------------------
-
-        self._update_progress(
-            "Processing",
-            "Extracting Frames",
-            50,
-        )
 
         frames = self.extract_frames(video_path)
 
@@ -137,35 +101,17 @@ def process(
         # Step 5 : OCR
         # ------------------------------------------------------
 
-        self._update_progress(
-            "Processing",
-            "Running OCR",
-            65,
-        )
-
         ocr_results = self.extract_ocr(frames)
 
         # ------------------------------------------------------
         # Step 6 : BLIP
         # ------------------------------------------------------
 
-        self._update_progress(
-            "Processing",
-            "Generating Captions",
-            75,
-        )
-
         captions = self.generate_captions(frames)
 
         # ------------------------------------------------------
-        # Step 7 : Chunking
+        # Step 7 : Semantic Chunk Generation
         # ------------------------------------------------------
-
-        self._update_progress(
-            "Processing",
-            "Generating Chunks",
-            85,
-        )
 
         chunks = self.generate_chunks(
             transcript,
@@ -173,23 +119,7 @@ def process(
             captions,
         )
 
-        # ------------------------------------------------------
-        # Step 8 : Embeddings
-        # ------------------------------------------------------
-
-        self._update_progress(
-            "Processing",
-            "Generating Embeddings",
-            95,
-        )
-
         stored_chunks = self.store_embeddings(chunks)
-
-        # ------------------------------------------------------
-        # Completed
-        # ------------------------------------------------------
-
-        self._set_completed()
 
         logger.info("=" * 60)
         logger.info("Video processing completed successfully.")
@@ -203,12 +133,6 @@ def process(
             "captions": captions,
             "chunks": stored_chunks,
         }
-
-    except Exception as error:
-
-        self._set_failed(error)
-
-        raise
 
         # ==========================================================
     # Metadata Extraction
@@ -439,17 +363,15 @@ def process(
 
         return chunks
 
-def store_embeddings(
+    def store_embeddings(
     self,
     chunks,
 ):
-    """
-    Generate embeddings and store them in ChromaDB.
-    """
 
-    logger.info("Embedding generation started.")
 
-    for chunk in chunks:
+       logger.info("Embedding generation started.")
+
+       for chunk in chunks:
 
         embedding = self.embedding_generator.generate_embedding(
             chunk.combined_text,
@@ -468,12 +390,12 @@ def store_embeddings(
             },
         )
 
+        # Store the generated ID in the chunk object
         if hasattr(chunk, "embedding_id"):
             chunk.embedding_id = embedding_id
 
-    logger.info(
+        logger.info(
         "Stored %d embeddings in ChromaDB.",
-        len(chunks),
-    )
-
-    return chunks
+            len(chunks),
+       )
+       return chunks
