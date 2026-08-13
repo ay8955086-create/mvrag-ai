@@ -9,13 +9,13 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import HTTPException, UploadFile
+from fastapi import BackgroundTasks, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from src.config.settings import settings
 from src.core.logger import get_logger
 from src.models.video import Video
-from src.pipeline.video_pipeline import VideoPipeline
+from src.services.background_service import BackgroundService
 from src.utils.video_metadata import extract_video_metadata
 
 logger = get_logger(__name__)
@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 
 class VideoService:
     """
-    Handles all video upload operations.
+    Handles video upload and video management operations.
     """
 
     ALLOWED_EXTENSIONS = {
@@ -39,72 +39,136 @@ class VideoService:
         file: UploadFile,
         title: str,
         description: str | None = None,
+        background_tasks: BackgroundTasks | None = None,
     ) -> Video:
         """
-        Upload a video, process it through the AI pipeline,
-        and store its metadata.
+        Upload a video and schedule AI processing
+        in the background.
+
+        The HTTP request returns immediately after the
+        video record is created.
         """
 
-        # ----------------------------------------------------------
-        # Validate file extension
-        # ----------------------------------------------------------
+        # ------------------------------------------------------
+        # Validate filename
+        # ------------------------------------------------------
 
-        extension = Path(file.filename).suffix.lower()
+        if not file.filename:
 
-        if extension not in VideoService.ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=400,
-                detail="Unsupported video format.",
+                detail="Video filename is required.",
             )
 
-        # ----------------------------------------------------------
-        # Save uploaded file
-        # ----------------------------------------------------------
+        extension = (
+            Path(file.filename)
+            .suffix
+            .lower()
+        )
 
-        unique_filename = f"{uuid.uuid4()}{extension}"
+        if extension not in VideoService.ALLOWED_EXTENSIONS:
 
-        save_path = settings.raw_video_dir / unique_filename
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Unsupported video format. "
+                    "Allowed formats: MP4, AVI, MOV, MKV."
+                ),
+            )
+
+        # ------------------------------------------------------
+        # Generate unique filename
+        # ------------------------------------------------------
+
+        unique_filename = (
+            f"{uuid.uuid4()}{extension}"
+        )
+
+        save_path = (
+            settings.raw_video_dir
+            / unique_filename
+        )
 
         logger.info(
             "Saving uploaded video to %s",
             save_path,
         )
 
-        with save_path.open("wb") as buffer:
-            shutil.copyfileobj(
-                file.file,
-                buffer,
+        # ------------------------------------------------------
+        # Save uploaded file
+        # ------------------------------------------------------
+
+        try:
+
+            with save_path.open("wb") as buffer:
+
+                shutil.copyfileobj(
+                    file.file,
+                    buffer,
+                )
+
+        except Exception:
+
+            logger.exception(
+                "Failed to save uploaded video."
             )
 
-        # ----------------------------------------------------------
+            if save_path.exists():
+                save_path.unlink()
+
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to save uploaded video.",
+            )
+
+        # ------------------------------------------------------
         # Extract metadata
-        # ----------------------------------------------------------
+        # ------------------------------------------------------
 
-        metadata = extract_video_metadata(
-            str(save_path),
-        )
+        try:
 
-        # ----------------------------------------------------------
+            metadata = extract_video_metadata(
+                str(save_path)
+            )
+
+        except Exception:
+
+            logger.exception(
+                "Failed to extract video metadata."
+            )
+
+            if save_path.exists():
+                save_path.unlink()
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Unable to read the uploaded video. "
+                    "Please verify that the file is valid."
+                ),
+            )
+
+        # ------------------------------------------------------
         # Create database record
-        # ----------------------------------------------------------
+        # ------------------------------------------------------
 
         video = Video(
             filename=unique_filename,
             title=title,
             description=description,
-
             duration=metadata["duration"],
             fps=metadata["fps"],
             width=metadata["width"],
             height=metadata["height"],
             size_mb=metadata["size_mb"],
-
             status="Processing",
             upload_time=datetime.now(UTC),
         )
 
         db.add(video)
+
         db.commit()
+
         db.refresh(video)
 
         logger.info(
@@ -112,62 +176,44 @@ class VideoService:
             video.id,
         )
 
-        # ----------------------------------------------------------
-        # Run AI Pipeline
-        # ----------------------------------------------------------
+        # ------------------------------------------------------
+        # Schedule background AI processing
+        # ------------------------------------------------------
 
-        pipeline = VideoPipeline()
+        if background_tasks is None:
 
-        try:
+            logger.warning(
+                "BackgroundTasks was not provided. "
+                "Video %d will remain in Processing state.",
+                video.id,
+            )
+
+        else:
+
+            background_tasks.add_task(
+                BackgroundService.process_video,
+                video.id,
+            )
 
             logger.info(
-                "Starting AI pipeline..."
+                "Background AI processing scheduled "
+                "for video %d.",
+                video.id,
             )
 
-            pipeline_result = pipeline.process(
-                save_path,
-            )
-
-            # Reserved for future use:
-            # transcript
-            # OCR
-            # captions
-            # chunks
-            # embeddings
-
-            _ = pipeline_result
-
-            video.status = "Completed"
-
-            logger.info(
-                "AI pipeline completed successfully."
-            )
-
-        except Exception:
-
-            logger.exception(
-                "Pipeline processing failed."
-            )
-
-            video.status = "Failed"
-
-            db.commit()
-
-            raise
-
-        # ----------------------------------------------------------
-        # Update status
-        # ----------------------------------------------------------
-
-        db.commit()
-        db.refresh(video)
-
-        logger.info(
-            "Video processing finished."
-        )
+        # ------------------------------------------------------
+        # IMPORTANT:
+        # Return immediately.
+        #
+        # DO NOT run VideoPipeline here.
+        # ------------------------------------------------------
 
         return video
-    
+
+    # ==========================================================
+    # Get All Videos
+    # ==========================================================
+
     @staticmethod
     def get_all_videos(
         db: Session,
@@ -176,13 +222,21 @@ class VideoService:
         Return all uploaded videos.
         """
 
-        logger.info("Fetching all videos.")
+        logger.info(
+            "Fetching all videos."
+        )
 
         return (
             db.query(Video)
-            .order_by(Video.upload_time.desc())
+            .order_by(
+                Video.upload_time.desc()
+            )
             .all()
         )
+
+    # ==========================================================
+    # Get Single Video
+    # ==========================================================
 
     @staticmethod
     def get_video(
@@ -207,13 +261,17 @@ class VideoService:
 
         return video
 
+    # ==========================================================
+    # Delete Video
+    # ==========================================================
+
     @staticmethod
     def delete_video(
         db: Session,
         video_id: int,
     ) -> dict:
         """
-        Delete a video.
+        Delete a video and its raw file.
         """
 
         video = db.get(
@@ -234,9 +292,11 @@ class VideoService:
         )
 
         if video_path.exists():
+
             video_path.unlink()
 
         db.delete(video)
+
         db.commit()
 
         logger.info(

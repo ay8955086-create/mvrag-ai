@@ -17,71 +17,145 @@ logger = get_logger(__name__)
 
 class FrameExtractor:
     """
-    Extracts frames from a video at a configurable interval.
+    Extracts representative frames from a video
+    at a configurable time interval.
     """
 
     def __init__(
         self,
-        interval_seconds: int | None = None,
+        interval_seconds: float | None = None,
     ):
         self.interval_seconds = (
-            interval_seconds
+            float(interval_seconds)
             if interval_seconds is not None
-            else settings.FRAME_INTERVAL_SECONDS
+            else float(settings.FRAME_INTERVAL_SECONDS)
         )
+
+        if self.interval_seconds <= 0:
+            raise ValueError(
+                "FRAME_INTERVAL_SECONDS must be greater than 0."
+            )
 
     def extract(
         self,
         video_path: str | Path,
     ) -> list[FrameInfo]:
         """
-        Extract frames from a video.
+        Extract representative frames from a video.
 
-        Parameters
-        ----------
-        video_path : str | Path
-            Path to the input video.
+        A frame is saved every `interval_seconds`.
 
-        Returns
-        -------
-        list[FrameInfo]
-            Extracted frame information including timestamps.
+        Example:
+            25 FPS + 2 second interval
+            ≈ 1 saved frame every 50 video frames.
         """
 
         video_path = Path(video_path)
 
         if not video_path.exists():
-            raise FileNotFoundError(video_path)
+            raise FileNotFoundError(
+                f"Video not found: {video_path}"
+            )
 
-        output_dir = settings.frames_dir / video_path.stem
+        output_dir = (
+            settings.frames_dir
+            / video_path.stem
+        )
+
         output_dir.mkdir(
             parents=True,
             exist_ok=True,
         )
 
-        capture = cv2.VideoCapture(str(video_path))
+        capture = cv2.VideoCapture(
+            str(video_path)
+        )
 
         if not capture.isOpened():
             raise RuntimeError(
                 f"Unable to open video: {video_path}"
             )
 
-        fps = capture.get(cv2.CAP_PROP_FPS)
+        fps = capture.get(
+            cv2.CAP_PROP_FPS
+        )
 
         if fps <= 0:
-            fps = 30
+            fps = 30.0
 
-        frame_interval = int(fps * self.interval_seconds)
+        frame_count = int(
+            capture.get(
+                cv2.CAP_PROP_FRAME_COUNT
+            )
+        )
+
+        duration = (
+            frame_count / fps
+            if frame_count > 0
+            else 0
+        )
+
+        frame_interval = max(
+            1,
+            int(
+                round(
+                    fps * self.interval_seconds
+                )
+            ),
+        )
+
+        estimated_frames = (
+            int(duration / self.interval_seconds) + 1
+            if duration > 0
+            else 0
+        )
+
+        logger.info(
+            "============================================================"
+        )
+
+        logger.info(
+            "Frame extraction started."
+        )
+
+        logger.info(
+            "Video       : %s",
+            video_path.name,
+        )
+
+        logger.info(
+            "FPS         : %.2f",
+            fps,
+        )
+
+        logger.info(
+            "Total frames: %d",
+            frame_count,
+        )
+
+        logger.info(
+            "Duration    : %.2f seconds",
+            duration,
+        )
+
+        logger.info(
+            "Interval    : %.2f seconds",
+            self.interval_seconds,
+        )
+
+        logger.info(
+            "Expected sampled frames: approximately %d",
+            estimated_frames,
+        )
+
+        logger.info(
+            "============================================================"
+        )
 
         extracted_frames: list[FrameInfo] = []
 
         frame_number = 0
         saved = 0
-
-        logger.info(
-            "Extracting frames from %s",
-            video_path.name,
-        )
 
         while True:
 
@@ -92,40 +166,86 @@ class FrameExtractor:
 
             if frame_number % frame_interval == 0:
 
-                timestamp = frame_number / fps
+                timestamp = (
+                    frame_number / fps
+                )
 
                 filename = (
                     output_dir
                     / f"frame_{saved:05d}.jpg"
                 )
 
-                # Resize for faster OCR & BLIP
+                # Resize before saving.
+                # This reduces the amount of data
+                # sent to OCR and BLIP.
                 frame = cv2.resize(
                     frame,
                     (960, 540),
+                    interpolation=cv2.INTER_AREA,
                 )
 
-                cv2.imwrite(
+                written = cv2.imwrite(
                     str(filename),
                     frame,
                 )
 
-                extracted_frames.append(
-                    FrameInfo(
-                        frame=filename,
-                        timestamp=round(timestamp, 2),
+                if not written:
+                    logger.warning(
+                        "Failed to save frame: %s",
+                        filename,
                     )
-                )
 
-                saved += 1
+                else:
+
+                    extracted_frames.append(
+                        FrameInfo(
+                            frame=filename,
+                            timestamp=round(
+                                timestamp,
+                                2,
+                            ),
+                        )
+                    )
+
+                    saved += 1
+
+                    if saved % 10 == 0:
+
+                        logger.info(
+                            "Sampled %d frames | timestamp %.2f sec",
+                            saved,
+                            timestamp,
+                        )
 
             frame_number += 1
 
         capture.release()
 
         logger.info(
-            "Extracted %d frames.",
+            "============================================================"
+        )
+
+        logger.info(
+            "Frame extraction completed."
+        )
+
+        logger.info(
+            "Frames decoded : %d",
+            frame_number,
+        )
+
+        logger.info(
+            "Frames saved   : %d",
             len(extracted_frames),
+        )
+
+        logger.info(
+            "Output folder  : %s",
+            output_dir,
+        )
+
+        logger.info(
+            "============================================================"
         )
 
         return extracted_frames

@@ -363,39 +363,121 @@ class VideoPipeline:
 
         return chunks
 
-    def store_embeddings(
-    self,
-    chunks,
-):
+        def store_embeddings(
+           self,
+           chunks,
+        ):
+        
 
-
-       logger.info("Embedding generation started.")
-
-       for chunk in chunks:
-
-        embedding = self.embedding_generator.generate_embedding(
-            chunk.combined_text,
+         logger.info(
+            "Embedding generation started."
         )
 
-        embedding_id = str(uuid4())
+        if not chunks:
+            logger.warning(
+                "No chunks available for embedding."
+            )
+            return chunks
 
-        self.chroma_store.add_embedding(
-            embedding_id=embedding_id,
-            embedding=embedding,
-            document=chunk.combined_text,
-            metadata={
+        # ------------------------------------------------------
+        # Prepare text for all chunks
+        # ------------------------------------------------------
+
+        texts = [
+            chunk.combined_text
+            for chunk in chunks
+        ]
+
+        logger.info(
+            "Preparing %d chunks for batch embedding.",
+            len(texts),
+        )
+
+        # ------------------------------------------------------
+        # Generate embeddings in batches
+        # ------------------------------------------------------
+
+        embeddings = (
+            self.embedding_generator.generate_embeddings(
+                texts,
+                batch_size=16,
+            )
+        )
+
+        if len(embeddings) != len(chunks):
+            raise RuntimeError(
+                "Number of generated embeddings does not "
+                "match number of chunks."
+            )
+
+        # ------------------------------------------------------
+        # Generate embedding IDs
+        # ------------------------------------------------------
+
+        embedding_ids = [
+            str(uuid4())
+            for _ in chunks
+        ]
+
+        # ------------------------------------------------------
+        # Prepare documents
+        # ------------------------------------------------------
+
+        documents = [
+            chunk.combined_text
+            for chunk in chunks
+        ]
+
+        # ------------------------------------------------------
+        # Prepare metadata
+        # ------------------------------------------------------
+
+        metadatas = [
+            {
                 "chunk_index": chunk.chunk_index,
                 "start_time": chunk.start_time,
                 "end_time": chunk.end_time,
-            },
-        )
+            }
+            for chunk in chunks
+        ]
 
-        # Store the generated ID in the chunk object
-        if hasattr(chunk, "embedding_id"):
-            chunk.embedding_id = embedding_id
+        # ------------------------------------------------------
+        # Store all embeddings in ChromaDB at once
+        # ------------------------------------------------------
 
         logger.info(
-        "Stored %d embeddings in ChromaDB.",
+            "Writing %d embeddings to ChromaDB...",
+            len(embedding_ids),
+        )
+
+        self.chroma_store.add_embeddings(
+            ids=embedding_ids,
+            embeddings=embeddings,
+            documents=documents,
+            metadatas=metadatas,
+        )
+
+        # ------------------------------------------------------
+        # Store generated IDs in chunk objects
+        # ------------------------------------------------------
+
+        for chunk, embedding_id in zip(
+            chunks,
+            embedding_ids,
+        ):
+            if hasattr(
+                chunk,
+                "embedding_id",
+            ):
+                chunk.embedding_id = embedding_id
+
+        logger.info(
+            "Stored %d embeddings in ChromaDB.",
             len(chunks),
-       )
-       return chunks
+        )
+
+        logger.info(
+            "ChromaDB indexing completed successfully."
+        )
+
+        return chunks    

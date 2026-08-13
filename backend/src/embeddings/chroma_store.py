@@ -25,14 +25,18 @@ class ChromaStore:
         )
 
         self.client = PersistentClient(
-            path=str(settings.vector_db_dir),
+            path=str(
+                settings.vector_db_dir
+            ),
         )
 
-        self.collection = self.client.get_or_create_collection(
-            name=settings.VECTOR_DB_NAME,
-            metadata={
-                "hnsw:space": "cosine",
-            },
+        self.collection = (
+            self.client.get_or_create_collection(
+                name=settings.VECTOR_DB_NAME,
+                metadata={
+                    "hnsw:space": "cosine",
+                },
+            )
         )
 
         logger.info(
@@ -40,9 +44,9 @@ class ChromaStore:
             settings.VECTOR_DB_NAME,
         )
 
-    # ---------------------------------------------------------
-    # Add Embedding
-    # ---------------------------------------------------------
+    # ==========================================================
+    # Add Single Embedding
+    # ==========================================================
 
     def add_embedding(
         self,
@@ -62,9 +66,9 @@ class ChromaStore:
             metadatas=[metadata],
         )
 
-    # ---------------------------------------------------------
+    # ==========================================================
     # Add Multiple Embeddings
-    # ---------------------------------------------------------
+    # ==========================================================
 
     def add_embeddings(
         self,
@@ -73,6 +77,30 @@ class ChromaStore:
         documents: list[str],
         metadatas: list[dict],
     ) -> None:
+        """
+        Store multiple embeddings in one ChromaDB operation.
+        """
+
+        if not ids:
+            logger.info(
+                "No embeddings to store."
+            )
+            return
+
+        if not (
+            len(ids)
+            == len(embeddings)
+            == len(documents)
+            == len(metadatas)
+        ):
+            raise ValueError(
+                "ChromaDB batch data lengths do not match."
+            )
+
+        logger.info(
+            "Writing %d embeddings to ChromaDB...",
+            len(ids),
+        )
 
         self.collection.add(
             ids=ids,
@@ -81,15 +109,23 @@ class ChromaStore:
             metadatas=metadatas,
         )
 
-    # ---------------------------------------------------------
+        logger.info(
+            "Successfully stored %d embeddings in ChromaDB.",
+            len(ids),
+        )
+
+    # ==========================================================
     # Search
-    # ---------------------------------------------------------
+    # ==========================================================
 
     def search(
         self,
         embedding: list[float],
         top_k: int = 5,
     ) -> dict:
+        """
+        Search the vector database.
+        """
 
         return self.collection.query(
             query_embeddings=[embedding],
