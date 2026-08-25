@@ -19,14 +19,14 @@ export const Search: React.FC = () => {
 
   useEffect(() => {
     if (initialQuery) {
-      ragMutation.mutate(initialQuery);
+      ragMutation.mutate({ question: initialQuery });
     }
   }, [initialQuery]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (queryInput.trim()) {
-      ragMutation.mutate(queryInput.trim());
+      ragMutation.mutate({ question: queryInput.trim() });
     }
   };
 
@@ -97,15 +97,20 @@ export const Search: React.FC = () => {
 
             <div className="grid grid-cols-1 gap-4">
               {ragMutation.data.context.map((chunk: ContextChunk, idx: number) => {
-                const matchedVideo = videos && videos[0]; // Link snippet to indexed video
-                const scorePercent = Math.round((chunk.score || 0.85) * 100);
+                const matchedVideo = chunk.video_id
+                  ? videos?.find((video) => video.id === chunk.video_id)
+                  : undefined;
+                const scorePercent =
+                  typeof chunk.score === 'number' && Number.isFinite(chunk.score)
+                    ? Math.round(Math.max(0, Math.min(1, chunk.score)) * 100)
+                    : null;
 
                 return (
                   <Card key={idx} hoverGlow className="p-5 flex flex-col md:flex-row items-start justify-between gap-4">
                     <div className="space-y-2 flex-1">
                       <div className="flex items-center gap-2 text-xs">
                         <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono text-[10px] font-bold">
-                          {scorePercent}% Similarity Score
+                          {scorePercent !== null ? `${scorePercent}% Similarity Score` : 'Similarity unavailable'}
                         </span>
                         <span className="font-mono text-slate-400 text-[10px]">Snippet #{idx + 1}</span>
                       </div>

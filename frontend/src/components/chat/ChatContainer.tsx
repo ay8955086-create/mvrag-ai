@@ -50,7 +50,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     setMessages((prev) => [...prev, userMsg]);
     if (!textToSend) setQuestionInput('');
 
-    ragMutation.mutate(query, {
+    ragMutation.mutate({ question: query, videoId: selectedVideoId }, {
       onSuccess: (data) => {
         const aiMsg: ChatMessageType = {
           id: `ai-${Date.now()}`,

@@ -24,15 +24,21 @@ export interface VideoCreateRequest {
 
 export interface QueryRequest {
   question: string;
+  video_id?: number | null;
 }
 
 export interface ContextChunk {
   document: string;
-  score: number;
+  score?: number;
+  distance?: number;
   start_time?: number;
   end_time?: number;
   chunk_index?: number;
   video_id?: number;
+  transcript?: string;
+  ocr_text?: string;
+  caption?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface QueryResponseData {
