@@ -90,3 +90,4 @@ data/processed_chunks/*
 # --------------------------
 .cache/
 models/
+backend.zip
