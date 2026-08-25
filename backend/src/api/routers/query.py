@@ -16,12 +16,10 @@ service = QueryService()
     "",
     response_model=APIResponse,
 )
-def query(
-    request: QueryRequest,
-):
-
+def query(request: QueryRequest):
     result = service.ask(
-        request.question,
+        question=request.question,
+        video_id=request.video_id,
     )
 
     return APIResponse(

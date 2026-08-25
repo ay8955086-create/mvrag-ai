@@ -11,27 +11,23 @@ logger = get_logger(__name__)
 
 
 class QueryService:
-    """
-    Handles user queries.
-    """
+    """Handles user queries."""
 
     def __init__(self):
-
         self.pipeline = QueryPipeline()
 
     def ask(
         self,
         question: str,
+        video_id: int | None = None,
     ) -> dict:
-        """
-        Process a user question.
-        """
-
         logger.info(
-            "Received question: %s",
+            "Received question: %s | video_id=%s",
             question,
+            video_id,
         )
 
         return self.pipeline.process_query(
-            question,
+            question=question,
+            video_id=video_id,
         )

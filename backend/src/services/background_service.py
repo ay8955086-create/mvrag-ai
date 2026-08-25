@@ -83,7 +83,16 @@ class BackgroundService:
             # Run complete AI pipeline
             # --------------------------------------------------
 
-            pipeline = VideoPipeline()
+            pipeline = VideoPipeline(
+                db=db,
+                video_id=video_id,
+            )
+
+            # Remove vectors from an earlier processing run for this
+            # video before rebuilding its index.
+            pipeline.chroma_store.delete_by_video_id(
+                video_id
+            )
 
             pipeline.process(
                 video_path

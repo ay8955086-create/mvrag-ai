@@ -10,7 +10,7 @@ from fastapi import (
 from sqlalchemy.orm import Session
 
 from src.database.session import get_db
-from src.schemas.video_response import VideoResponse
+from src.schemas.video_response import ExtendedVideoResponse, VideoResponse
 from src.services.video_service import VideoService
 
 
@@ -67,17 +67,17 @@ def list_videos(
 
 @router.get(
     "/{video_id}",
-    response_model=VideoResponse,
+    response_model=ExtendedVideoResponse,
 )
 def get_video(
     video_id: int,
     db: Session = Depends(get_db),
 ):
     """
-    Return one video.
+    Return one video together with persisted multimodal results.
     """
 
-    return VideoService.get_video(
+    return VideoService.get_extended_video(
         db,
         video_id,
     )

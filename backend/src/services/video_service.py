@@ -10,10 +10,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import BackgroundTasks, HTTPException, UploadFile
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
 
 from src.config.settings import settings
 from src.core.logger import get_logger
+from src.models.analytics import Analytics
 from src.models.video import Video
 from src.services.background_service import BackgroundService
 from src.utils.video_metadata import extract_video_metadata
@@ -254,6 +256,41 @@ class VideoService:
 
         if video is None:
 
+            raise HTTPException(
+                status_code=404,
+                detail="Video not found.",
+            )
+
+        return video
+
+    # ==========================================================
+    # Get Extended Video Details
+    # ==========================================================
+
+    @staticmethod
+    def get_extended_video(
+        db: Session,
+        video_id: int,
+    ) -> Video:
+        """
+        Return a video together with its persisted multimodal results.
+        """
+
+        statement = (
+            select(Video)
+            .options(
+                selectinload(Video.transcripts),
+                selectinload(Video.ocr_results),
+                selectinload(Video.captions),
+                selectinload(Video.chunks),
+                selectinload(Video.analytics),
+            )
+            .where(Video.id == video_id)
+        )
+
+        video = db.execute(statement).scalar_one_or_none()
+
+        if video is None:
             raise HTTPException(
                 status_code=404,
                 detail="Video not found.",

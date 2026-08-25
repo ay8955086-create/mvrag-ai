@@ -4,6 +4,8 @@ Embedding Generator for MVRAG AI.
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 from sentence_transformers import SentenceTransformer
 
 from src.config.settings import settings
@@ -12,39 +14,41 @@ from src.core.logger import get_logger
 logger = get_logger(__name__)
 
 
+@lru_cache(maxsize=1)
+def get_embedding_model() -> SentenceTransformer:
+    """
+    Load the embedding model once and reuse it.
+    """
+
+    logger.info(
+        "Loading embedding model: %s",
+        settings.EMBEDDING_MODEL,
+    )
+
+    model = SentenceTransformer(
+        settings.EMBEDDING_MODEL
+    )
+
+    logger.info(
+        "Embedding model loaded successfully."
+    )
+
+    return model
+
+
 class EmbeddingGenerator:
     """
-    Generates embeddings using the configured BGE model.
-
-    Supports both single-text and batch embedding generation.
+    Generates embeddings using BGE.
     """
 
     def __init__(self):
 
-        logger.info(
-            "Loading embedding model: %s",
-            settings.EMBEDDING_MODEL,
-        )
-
-        self.model = SentenceTransformer(
-            settings.EMBEDDING_MODEL
-        )
-
-        logger.info(
-            "Embedding model loaded successfully."
-        )
-
-    # ==========================================================
-    # Single Embedding
-    # ==========================================================
+        self.model = get_embedding_model()
 
     def generate_embedding(
         self,
         text: str,
     ) -> list[float]:
-        """
-        Generate an embedding for a single text.
-        """
 
         embedding = self.model.encode(
             text,
@@ -54,33 +58,18 @@ class EmbeddingGenerator:
 
         return embedding.tolist()
 
-    # ==========================================================
-    # Batch Embeddings
-    # ==========================================================
-
     def generate_embeddings(
         self,
         texts: list[str],
         batch_size: int = 16,
     ) -> list[list[float]]:
-        """
-        Generate embeddings for multiple texts in batches.
-
-        Batch processing is significantly faster than calling
-        generate_embedding() separately for every chunk.
-        """
 
         if not texts:
             return []
 
         logger.info(
-            "Generating embeddings for %d chunks...",
+            "Generating embeddings for %d chunks.",
             len(texts),
-        )
-
-        logger.info(
-            "Embedding batch size: %d",
-            batch_size,
         )
 
         embeddings = self.model.encode(
@@ -94,7 +83,7 @@ class EmbeddingGenerator:
         result = embeddings.tolist()
 
         logger.info(
-            "Generated %d embeddings successfully.",
+            "Generated %d embeddings.",
             len(result),
         )
 

@@ -1,26 +1,34 @@
 """
-Main processing pipeline...
+Main processing pipeline for MVRAG AI.
+
+This module orchestrates the complete video processing workflow.
 """
 
 from __future__ import annotations
 
-from uuid import uuid4
 from pathlib import Path
+from time import perf_counter
+from uuid import uuid4
 
-from src.embeddings.embedding_generator import EmbeddingGenerator
-from src.embeddings.chroma_store import ChromaStore
+from sqlalchemy.orm import Session
+
+from src.models.analytics import Analytics
+from src.models.caption import Caption
+from src.models.chunk import Chunk
+from src.models.ocr import OCRResult
+from src.models.transcript import Transcript
 
 from src.core.logger import get_logger
-from src.utils.video_metadata import extract_video_metadata
-
+from src.embeddings.chroma_store import ChromaStore
+from src.embeddings.embedding_generator import EmbeddingGenerator
 from src.models.frame_info import FrameInfo
-
 from src.processors.audio.audio_extractor import AudioExtractor
-from src.processors.whisper.transcriber import WhisperTranscriber
-from src.processors.frames.frame_extractor import FrameExtractor
-from src.processors.ocr.ocr_processor import OCRProcessor
 from src.processors.caption.caption_generator import CaptionGenerator
 from src.processors.chunking.chunk_generator import ChunkGenerator
+from src.processors.frames.frame_extractor import FrameExtractor
+from src.processors.ocr.ocr_processor import OCRProcessor
+from src.processors.whisper.transcriber import WhisperTranscriber
+from src.utils.video_metadata import extract_video_metadata
 
 logger = get_logger(__name__)
 
@@ -30,10 +38,20 @@ class VideoPipeline:
     Executes the complete AI pipeline for one uploaded video.
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        db: Session | None = None,
+        video_id: int | None = None,
+    ):
         """
         Initialize all pipeline components.
+
+        db and video_id are optional so the pipeline remains reusable
+        outside the background API workflow.
         """
+
+        self.db = db
+        self.video_id = video_id
 
         self.audio_extractor = AudioExtractor()
 
@@ -51,7 +69,9 @@ class VideoPipeline:
 
         self.chroma_store = ChromaStore()
 
-        logger.info("VideoPipeline initialized.")
+        logger.info(
+            "VideoPipeline initialized."
+        )
 
     # ==========================================================
     # Main Pipeline
@@ -65,52 +85,72 @@ class VideoPipeline:
         Execute the complete processing pipeline.
         """
 
+        started_at = perf_counter()
+
         video_path = Path(video_path)
 
         if not video_path.exists():
-            raise FileNotFoundError(video_path)
+            raise FileNotFoundError(
+                video_path
+            )
 
         logger.info("=" * 60)
-        logger.info("Processing video: %s", video_path.name)
+
+        logger.info(
+            "Processing video: %s",
+            video_path.name,
+        )
 
         # ------------------------------------------------------
-        # Step 1 : Metadata
+        # Step 1: Metadata
         # ------------------------------------------------------
 
-        metadata = self.extract_metadata(video_path)
+        metadata = self.extract_metadata(
+            video_path
+        )
 
         # ------------------------------------------------------
-        # Step 2 : Audio
+        # Step 2: Audio
         # ------------------------------------------------------
 
-        audio_path = self.extract_audio(video_path)
+        audio_path = self.extract_audio(
+            video_path
+        )
 
         # ------------------------------------------------------
-        # Step 3 : Whisper
+        # Step 3: Whisper
         # ------------------------------------------------------
 
-        transcript = self.transcribe(audio_path)
+        transcript = self.transcribe(
+            audio_path
+        )
 
         # ------------------------------------------------------
-        # Step 4 : Frames
+        # Step 4: Frames
         # ------------------------------------------------------
 
-        frames = self.extract_frames(video_path)
+        frames = self.extract_frames(
+            video_path
+        )
 
         # ------------------------------------------------------
-        # Step 5 : OCR
+        # Step 5: OCR
         # ------------------------------------------------------
 
-        ocr_results = self.extract_ocr(frames)
+        ocr_results = self.extract_ocr(
+            frames
+        )
 
         # ------------------------------------------------------
-        # Step 6 : BLIP
+        # Step 6: BLIP
         # ------------------------------------------------------
 
-        captions = self.generate_captions(frames)
+        captions = self.generate_captions(
+            frames
+        )
 
         # ------------------------------------------------------
-        # Step 7 : Semantic Chunk Generation
+        # Step 7: Semantic Chunks
         # ------------------------------------------------------
 
         chunks = self.generate_chunks(
@@ -119,10 +159,28 @@ class VideoPipeline:
             captions,
         )
 
-        stored_chunks = self.store_embeddings(chunks)
+        # ------------------------------------------------------
+        # Step 8: Embeddings + ChromaDB
+        # ------------------------------------------------------
+
+        stored_chunks = self.store_embeddings(
+            chunks
+        )
+
+        if self.db is not None and self.video_id is not None:
+            self.persist_results(
+                transcript=transcript,
+                ocr_results=ocr_results,
+                captions=captions,
+                chunks=stored_chunks,
+                processing_time=perf_counter() - started_at,
+            )
 
         logger.info("=" * 60)
-        logger.info("Video processing completed successfully.")
+
+        logger.info(
+            "Video processing completed successfully."
+        )
 
         return {
             "metadata": metadata,
@@ -134,7 +192,7 @@ class VideoPipeline:
             "chunks": stored_chunks,
         }
 
-        # ==========================================================
+    # ==========================================================
     # Metadata Extraction
     # ==========================================================
 
@@ -146,14 +204,21 @@ class VideoPipeline:
         Extract metadata from the uploaded video.
         """
 
-        logger.info("Metadata extraction started.")
+        logger.info(
+            "Metadata extraction started."
+        )
 
-        metadata = extract_video_metadata(str(video_path))
-
-        logger.info("Metadata extracted successfully.")
+        metadata = extract_video_metadata(
+            str(video_path)
+        )
 
         logger.info(
-            "Duration : %.2f sec | FPS : %.2f | Resolution : %dx%d | Size : %.2f MB",
+            "Metadata extracted successfully."
+        )
+
+        logger.info(
+            "Duration : %.2f sec | FPS : %.2f | "
+            "Resolution : %dx%d | Size : %.2f MB",
             metadata["duration"],
             metadata["fps"],
             metadata["width"],
@@ -175,14 +240,22 @@ class VideoPipeline:
         Extract audio from the uploaded video.
         """
 
-        logger.info("Audio extraction started.")
+        logger.info(
+            "Audio extraction started."
+        )
 
-        audio_path = self.audio_extractor.extract(video_path)
-
-        logger.info("Audio extraction completed.")
+        audio_path = (
+            self.audio_extractor.extract(
+                video_path
+            )
+        )
 
         logger.info(
-            "Audio saved at : %s",
+            "Audio extraction completed."
+        )
+
+        logger.info(
+            "Audio saved at: %s",
             audio_path,
         )
 
@@ -200,14 +273,20 @@ class VideoPipeline:
         Transcribe extracted audio using Whisper.
         """
 
-        logger.info("Whisper transcription started.")
+        logger.info(
+            "Whisper transcription started."
+        )
 
-        result = self.whisper.transcribe(audio_path)
-
-        logger.info("Whisper transcription completed.")
+        result = self.whisper.transcribe(
+            audio_path
+        )
 
         logger.info(
-            "Detected Language : %s",
+            "Whisper transcription completed."
+        )
+
+        logger.info(
+            "Detected Language: %s",
             result.get(
                 "language",
                 "unknown",
@@ -215,7 +294,7 @@ class VideoPipeline:
         )
 
         logger.info(
-            "Transcript Segments : %d",
+            "Transcript Segments: %d",
             len(
                 result.get(
                     "segments",
@@ -238,22 +317,26 @@ class VideoPipeline:
         Extract frames from the uploaded video.
         """
 
-        logger.info("Frame extraction started.")
-
-        frames = self.frame_extractor.extract(
-            video_path,
+        logger.info(
+            "Frame extraction started."
         )
 
-        logger.info("Frame extraction completed.")
+        frames = self.frame_extractor.extract(
+            video_path
+        )
 
         logger.info(
-            "Total Frames Extracted : %d",
+            "Frame extraction completed."
+        )
+
+        logger.info(
+            "Total Frames Extracted: %d",
             len(frames),
         )
 
         return frames
 
-        # ==========================================================
+    # ==========================================================
     # OCR
     # ==========================================================
 
@@ -265,14 +348,18 @@ class VideoPipeline:
         Run OCR on all extracted frames.
         """
 
-        logger.info("OCR processing started.")
+        logger.info(
+            "OCR processing started."
+        )
 
-        results = []
+        results: list[dict] = []
 
         for frame_info in frames:
 
-            result = self.ocr_processor.extract_text(
-                frame_info.frame,
+            result = (
+                self.ocr_processor.extract_text(
+                    frame_info.frame
+                )
             )
 
             results.append(
@@ -284,7 +371,9 @@ class VideoPipeline:
                 }
             )
 
-        logger.info("OCR processing completed.")
+        logger.info(
+            "OCR processing completed."
+        )
 
         logger.info(
             "OCR completed for %d frames.",
@@ -305,14 +394,18 @@ class VideoPipeline:
         Generate captions for all extracted frames.
         """
 
-        logger.info("BLIP caption generation started.")
+        logger.info(
+            "BLIP caption generation started."
+        )
 
-        captions = []
+        captions: list[dict] = []
 
         for frame_info in frames:
 
-            caption = self.caption_generator.generate_caption(
-                frame_info.frame,
+            caption = (
+                self.caption_generator.generate_caption(
+                    frame_info.frame
+                )
             )
 
             captions.append(
@@ -323,7 +416,9 @@ class VideoPipeline:
                 }
             )
 
-        logger.info("BLIP caption generation completed.")
+        logger.info(
+            "BLIP caption generation completed."
+        )
 
         logger.info(
             "Generated captions for %d frames.",
@@ -346,15 +441,23 @@ class VideoPipeline:
         Generate semantic chunks.
         """
 
-        logger.info("Semantic chunk generation started.")
-
-        chunks = self.chunk_generator.generate_chunks(
-            transcript_segments=transcript["segments"],
-            ocr_results=ocr_results,
-            captions=captions,
+        logger.info(
+            "Semantic chunk generation started."
         )
 
-        logger.info("Semantic chunk generation completed.")
+        chunks = (
+            self.chunk_generator.generate_chunks(
+                transcript_segments=transcript[
+                    "segments"
+                ],
+                ocr_results=ocr_results,
+                captions=captions,
+            )
+        )
+
+        logger.info(
+            "Semantic chunk generation completed."
+        )
 
         logger.info(
             "Generated %d semantic chunks.",
@@ -363,24 +466,33 @@ class VideoPipeline:
 
         return chunks
 
-        def store_embeddings(
-           self,
-           chunks,
-        ):
-        
+    # ==========================================================
+    # Embedding Generation + ChromaDB
+    # ==========================================================
 
-         logger.info(
+    def store_embeddings(
+        self,
+        chunks,
+    ):
+        """
+        Generate embeddings in batches and store
+        them in ChromaDB.
+        """
+
+        logger.info(
             "Embedding generation started."
         )
 
         if not chunks:
+
             logger.warning(
                 "No chunks available for embedding."
             )
+
             return chunks
 
         # ------------------------------------------------------
-        # Prepare text for all chunks
+        # Prepare texts
         # ------------------------------------------------------
 
         texts = [
@@ -394,7 +506,7 @@ class VideoPipeline:
         )
 
         # ------------------------------------------------------
-        # Generate embeddings in batches
+        # Generate batch embeddings
         # ------------------------------------------------------
 
         embeddings = (
@@ -405,13 +517,14 @@ class VideoPipeline:
         )
 
         if len(embeddings) != len(chunks):
+
             raise RuntimeError(
                 "Number of generated embeddings does not "
                 "match number of chunks."
             )
 
         # ------------------------------------------------------
-        # Generate embedding IDs
+        # Generate IDs
         # ------------------------------------------------------
 
         embedding_ids = [
@@ -434,20 +547,22 @@ class VideoPipeline:
 
         metadatas = [
             {
+                "video_id": int(self.video_id)
+                if self.video_id is not None
+                else 0,
                 "chunk_index": chunk.chunk_index,
-                "start_time": chunk.start_time,
-                "end_time": chunk.end_time,
+                "start_time": float(chunk.start_time),
+                "end_time": float(chunk.end_time),
             }
             for chunk in chunks
         ]
 
         # ------------------------------------------------------
-        # Store all embeddings in ChromaDB at once
+        # Batch ChromaDB insertion
         # ------------------------------------------------------
 
         logger.info(
-            "Writing %d embeddings to ChromaDB...",
-            len(embedding_ids),
+            "Starting ChromaDB indexing."
         )
 
         self.chroma_store.add_embeddings(
@@ -458,17 +573,19 @@ class VideoPipeline:
         )
 
         # ------------------------------------------------------
-        # Store generated IDs in chunk objects
+        # Store IDs on chunks
         # ------------------------------------------------------
 
         for chunk, embedding_id in zip(
             chunks,
             embedding_ids,
         ):
+
             if hasattr(
                 chunk,
                 "embedding_id",
             ):
+
                 chunk.embedding_id = embedding_id
 
         logger.info(
@@ -480,4 +597,125 @@ class VideoPipeline:
             "ChromaDB indexing completed successfully."
         )
 
-        return chunks    
+        return chunks
+
+    # ==========================================================
+    # Database Persistence
+    # ==========================================================
+
+    def persist_results(
+        self,
+        transcript: dict,
+        ocr_results: list[dict],
+        captions: list[dict],
+        chunks,
+        processing_time: float,
+    ) -> None:
+        """Persist all extracted multimodal results for the video."""
+
+        if self.db is None or self.video_id is None:
+            return
+
+        video_id = int(self.video_id)
+
+        logger.info(
+            "Persisting processing results for video %d.",
+            video_id,
+        )
+
+        self.db.query(Transcript).filter(
+            Transcript.video_id == video_id
+        ).delete(synchronize_session=False)
+
+        self.db.query(OCRResult).filter(
+            OCRResult.video_id == video_id
+        ).delete(synchronize_session=False)
+
+        self.db.query(Caption).filter(
+            Caption.video_id == video_id
+        ).delete(synchronize_session=False)
+
+        self.db.query(Chunk).filter(
+            Chunk.video_id == video_id
+        ).delete(synchronize_session=False)
+
+        self.db.query(Analytics).filter(
+            Analytics.video_id == video_id
+        ).delete(synchronize_session=False)
+
+        transcript_rows = [
+            Transcript(
+                video_id=video_id,
+                start_time=float(segment["start"]),
+                end_time=float(segment["end"]),
+                text=str(segment.get("text", "")).strip(),
+                language=str(transcript.get("language", "en")),
+                confidence=1.0,
+            )
+            for segment in transcript.get("segments", [])
+        ]
+        self.db.add_all(transcript_rows)
+
+        ocr_rows = [
+            OCRResult(
+                video_id=video_id,
+                frame_number=index,
+                timestamp=float(item["timestamp"]),
+                text=str(item.get("text", "")),
+                confidence=float(item.get("confidence", 0.0)),
+            )
+            for index, item in enumerate(ocr_results)
+        ]
+        self.db.add_all(ocr_rows)
+
+        caption_rows = [
+            Caption(
+                video_id=video_id,
+                frame_number=index,
+                timestamp=float(item["timestamp"]),
+                caption=str(item.get("caption", "")),
+            )
+            for index, item in enumerate(captions)
+        ]
+        self.db.add_all(caption_rows)
+
+        chunk_rows = [
+            Chunk(
+                video_id=video_id,
+                chunk_index=int(chunk.chunk_index),
+                start_time=float(chunk.start_time),
+                end_time=float(chunk.end_time),
+                transcript=str(chunk.transcript),
+                ocr_text=str(chunk.ocr_text),
+                caption=str(chunk.caption),
+                combined_text=str(chunk.combined_text),
+                embedding_id=getattr(chunk, "embedding_id", None),
+            )
+            for chunk in chunks
+        ]
+        self.db.add_all(chunk_rows)
+
+        self.db.add(
+            Analytics(
+                video_id=video_id,
+                processing_time=float(processing_time),
+                transcript_segments=len(transcript_rows),
+                ocr_detections=len(ocr_rows),
+                caption_count=len(caption_rows),
+                chunk_count=len(chunk_rows),
+                total_queries=0,
+                average_response_time=0.0,
+            )
+        )
+
+        self.db.commit()
+
+        logger.info(
+            "Persisted %d transcripts, %d OCR results, %d captions "
+            "and %d chunks for video %d.",
+            len(transcript_rows),
+            len(ocr_rows),
+            len(caption_rows),
+            len(chunk_rows),
+            video_id,
+        )

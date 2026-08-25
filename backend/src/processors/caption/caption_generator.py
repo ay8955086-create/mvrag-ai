@@ -4,6 +4,7 @@ BLIP image caption generator for MVRAG AI.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 
 from PIL import Image
@@ -18,34 +19,61 @@ from src.core.logger import get_logger
 logger = get_logger(__name__)
 
 
+@lru_cache(maxsize=1)
+def get_blip_components():
+
+    logger.info(
+        "Loading BLIP model: %s",
+        settings.IMAGE_CAPTION_MODEL,
+    )
+
+    processor = (
+        BlipProcessor.from_pretrained(
+            settings.IMAGE_CAPTION_MODEL
+        )
+    )
+
+    model = (
+        BlipForConditionalGeneration.from_pretrained(
+            settings.IMAGE_CAPTION_MODEL
+        )
+    )
+
+    logger.info(
+        "BLIP model loaded successfully."
+    )
+
+    return processor, model
+
+
 class CaptionGenerator:
     """
-    Generates captions for video frames using BLIP.
+    Generates captions for video frames.
     """
 
     def __init__(self):
 
-        logger.info(
-            "Loading BLIP model: %s",
-            settings.IMAGE_CAPTION_MODEL,
-        )
+        (
+            self.processor,
+            self.model,
+        ) = get_blip_components()
 
-        self.processor = BlipProcessor.from_pretrained(
-            settings.IMAGE_CAPTION_MODEL
-        )
-
-        self.model = BlipForConditionalGeneration.from_pretrained(
-            settings.IMAGE_CAPTION_MODEL
-        )
-
-    def generate_caption(self, image_path: str | Path) -> str:
+    def generate_caption(
+        self,
+        image_path: str | Path,
+    ) -> str:
 
         image_path = Path(image_path)
 
         if not image_path.exists():
-            raise FileNotFoundError(image_path)
+            raise FileNotFoundError(
+                image_path
+            )
 
-        image = Image.open(image_path).convert("RGB")
+        image = (
+            Image.open(image_path)
+            .convert("RGB")
+        )
 
         inputs = self.processor(
             image,
@@ -57,14 +85,7 @@ class CaptionGenerator:
             max_new_tokens=30,
         )
 
-        caption = self.processor.decode(
+        return self.processor.decode(
             output[0],
             skip_special_tokens=True,
         )
-
-        logger.info(
-            "Caption generated for %s",
-            image_path.name,
-        )
-
-        return caption

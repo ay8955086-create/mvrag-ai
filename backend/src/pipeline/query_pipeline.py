@@ -15,63 +15,34 @@ logger = get_logger(__name__)
 
 
 class QueryPipeline:
-    """
-    Executes the complete query pipeline.
-
-    Workflow:
-        Question
-            ↓
-        Retriever
-            ↓
-        Reranker
-            ↓
-        LLM
-            ↓
-        Final Answer
-    """
+    """Executes the complete query pipeline."""
 
     def __init__(self):
-        """
-        Initialize all query components.
-        """
-
         self.retrieval_service = RetrievalService()
         self.llm_service = LLMService()
-
         logger.info("QueryPipeline initialized.")
-
-    # ==========================================================
-    # Query Pipeline
-    # ==========================================================
 
     def process_query(
         self,
         question: str,
+        video_id: int | None = None,
     ) -> dict:
-        """
-        Process a user question.
-        """
-
         logger.info("=" * 60)
-        logger.info("Processing Question")
+        logger.info(
+            "Processing Question | video_id=%s",
+            video_id,
+        )
         logger.info("Question: %s", question)
 
-        # ------------------------------------------------------
-        # Step 1 : Retrieve Context
-        # ------------------------------------------------------
-
         context = self.retrieval_service.retrieve_context(
-            question,
+            query=question,
+            video_id=video_id,
         )
 
         logger.info(
             "Retrieved %d context chunks.",
             len(context),
         )
-
-        # ------------------------------------------------------
-        # Step 2 : Generate Answer
-        # ------------------------------------------------------
 
         answer = self.llm_service.answer(
             question,
@@ -83,6 +54,7 @@ class QueryPipeline:
 
         return {
             "question": question,
+            "video_id": video_id,
             "context": context,
             "answer": answer,
         }
