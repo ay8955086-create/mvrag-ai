@@ -12,6 +12,7 @@ from src.database.session import SessionLocal
 from src.models.video import Video
 from src.pipeline.video_pipeline import VideoPipeline
 
+
 logger = get_logger(__name__)
 
 
@@ -28,8 +29,8 @@ class BackgroundService:
         """
         Process a video in the background.
 
-        A new database session is created here because the
-        original FastAPI request session may already be closed.
+        The video has already been normalized by
+        VideoService before this task starts.
         """
 
         db = SessionLocal()
@@ -44,6 +45,10 @@ class BackgroundService:
                 "Background processing started for video %d",
                 video_id,
             )
+
+            # ==================================================
+            # Load video
+            # ==================================================
 
             video = db.get(
                 Video,
@@ -63,12 +68,16 @@ class BackgroundService:
 
             db.commit()
 
+            # ==================================================
+            # Locate normalized video
+            # ==================================================
+
             video_path = (
                 settings.raw_video_dir
                 / video.filename
             )
 
-            if not video_path.exists():
+            if not video_path.is_file():
 
                 raise FileNotFoundError(
                     f"Video file not found: {video_path}"
@@ -79,28 +88,34 @@ class BackgroundService:
                 video_path,
             )
 
-            # --------------------------------------------------
+            # ==================================================
             # Run complete AI pipeline
-            # --------------------------------------------------
+            # ==================================================
 
             pipeline = VideoPipeline(
                 db=db,
                 video_id=video_id,
             )
 
-            # Remove vectors from an earlier processing run for this
-            # video before rebuilding its index.
+            # --------------------------------------------------
+            # Remove old vectors for this video
+            # --------------------------------------------------
+
             pipeline.chroma_store.delete_by_video_id(
                 video_id
             )
+
+            # --------------------------------------------------
+            # Process normalized video
+            # --------------------------------------------------
 
             pipeline.process(
                 video_path
             )
 
-            # --------------------------------------------------
+            # ==================================================
             # Processing completed
-            # --------------------------------------------------
+            # ==================================================
 
             video.status = "Completed"
 
@@ -122,10 +137,15 @@ class BackgroundService:
         except Exception as error:
 
             logger.exception(
-                "Background processing failed for video %d: %s",
+                "Background processing failed "
+                "for video %d: %s",
                 video_id,
                 error,
             )
+
+            # ==================================================
+            # Mark video as failed
+            # ==================================================
 
             try:
 
@@ -143,7 +163,8 @@ class BackgroundService:
             except Exception:
 
                 logger.exception(
-                    "Failed to update video %d status to Failed.",
+                    "Failed to update video %d "
+                    "status to Failed.",
                     video_id,
                 )
 
@@ -152,6 +173,7 @@ class BackgroundService:
             db.close()
 
             logger.info(
-                "Background database session closed for video %d.",
+                "Background database session closed "
+                "for video %d.",
                 video_id,
             )

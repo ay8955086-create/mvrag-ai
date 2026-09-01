@@ -9,16 +9,31 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import BackgroundTasks, HTTPException, UploadFile
+from fastapi import (
+    BackgroundTasks,
+    HTTPException,
+    UploadFile,
+)
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import (
+    Session,
+    selectinload,
+)
 
 from src.config.settings import settings
 from src.core.logger import get_logger
 from src.models.analytics import Analytics
 from src.models.video import Video
-from src.services.background_service import BackgroundService
-from src.utils.video_metadata import extract_video_metadata
+from src.processors.video_normalizer import (
+    VideoNormalizer,
+)
+from src.services.background_service import (
+    BackgroundService,
+)
+from src.utils.video_metadata import (
+    extract_video_metadata,
+)
+
 
 logger = get_logger(__name__)
 
@@ -44,16 +59,17 @@ class VideoService:
         background_tasks: BackgroundTasks | None = None,
     ) -> Video:
         """
-        Upload a video and schedule AI processing
-        in the background.
+        Upload a video, normalize it for browser playback,
+        create its database record, and schedule AI processing.
 
-        The HTTP request returns immediately after the
-        video record is created.
+        The normalized video replaces the original uploaded
+        file so the database filename always points to the
+        browser-compatible file.
         """
 
-        # ------------------------------------------------------
+        # ======================================================
         # Validate filename
-        # ------------------------------------------------------
+        # ======================================================
 
         if not file.filename:
 
@@ -78,9 +94,9 @@ class VideoService:
                 ),
             )
 
-        # ------------------------------------------------------
+        # ======================================================
         # Generate unique filename
-        # ------------------------------------------------------
+        # ======================================================
 
         unique_filename = (
             f"{uuid.uuid4()}{extension}"
@@ -96,13 +112,15 @@ class VideoService:
             save_path,
         )
 
-        # ------------------------------------------------------
+        # ======================================================
         # Save uploaded file
-        # ------------------------------------------------------
+        # ======================================================
 
         try:
 
-            with save_path.open("wb") as buffer:
+            with save_path.open(
+                "wb"
+            ) as buffer:
 
                 shutil.copyfileobj(
                     file.file,
@@ -123,9 +141,65 @@ class VideoService:
                 detail="Failed to save uploaded video.",
             )
 
-        # ------------------------------------------------------
-        # Extract metadata
-        # ------------------------------------------------------
+        # ======================================================
+        # Normalize video
+        # ======================================================
+
+        normalized_path = None
+
+        try:
+
+            logger.info(
+                "Normalizing uploaded video for "
+                "browser playback."
+            )
+
+            normalizer = VideoNormalizer()
+
+            normalized_path = normalizer.normalize(
+                save_path
+            )
+
+            # --------------------------------------------------
+            # Replace the original file with the normalized file
+            # --------------------------------------------------
+
+            save_path.unlink()
+
+            normalized_path.rename(
+                save_path
+            )
+
+            logger.info(
+                "Browser-compatible video created: %s",
+                save_path,
+            )
+
+        except Exception:
+
+            logger.exception(
+                "Failed to normalize uploaded video."
+            )
+
+            if normalized_path is not None:
+
+                if normalized_path.exists():
+                    normalized_path.unlink()
+
+            if save_path.exists():
+                save_path.unlink()
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Unable to prepare the uploaded video "
+                    "for browser playback."
+                ),
+            )
+
+        # ======================================================
+        # Extract metadata AFTER normalization
+        # ======================================================
 
         try:
 
@@ -150,9 +224,9 @@ class VideoService:
                 ),
             )
 
-        # ------------------------------------------------------
+        # ======================================================
         # Create database record
-        # ------------------------------------------------------
+        # ======================================================
 
         video = Video(
             filename=unique_filename,
@@ -178,9 +252,9 @@ class VideoService:
             video.id,
         )
 
-        # ------------------------------------------------------
+        # ======================================================
         # Schedule background AI processing
-        # ------------------------------------------------------
+        # ======================================================
 
         if background_tasks is None:
 
@@ -203,12 +277,9 @@ class VideoService:
                 video.id,
             )
 
-        # ------------------------------------------------------
-        # IMPORTANT:
-        # Return immediately.
-        #
-        # DO NOT run VideoPipeline here.
-        # ------------------------------------------------------
+        # ======================================================
+        # Return immediately
+        # ======================================================
 
         return video
 
@@ -273,24 +344,41 @@ class VideoService:
         video_id: int,
     ) -> Video:
         """
-        Return a video together with its persisted multimodal results.
+        Return a video together with its persisted
+        multimodal results.
         """
 
         statement = (
             select(Video)
             .options(
-                selectinload(Video.transcripts),
-                selectinload(Video.ocr_results),
-                selectinload(Video.captions),
-                selectinload(Video.chunks),
-                selectinload(Video.analytics),
+                selectinload(
+                    Video.transcripts
+                ),
+                selectinload(
+                    Video.ocr_results
+                ),
+                selectinload(
+                    Video.captions
+                ),
+                selectinload(
+                    Video.chunks
+                ),
+                selectinload(
+                    Video.analytics
+                ),
             )
-            .where(Video.id == video_id)
+            .where(
+                Video.id == video_id
+            )
         )
 
-        video = db.execute(statement).scalar_one_or_none()
+        video = (
+            db.execute(statement)
+            .scalar_one_or_none()
+        )
 
         if video is None:
+
             raise HTTPException(
                 status_code=404,
                 detail="Video not found.",
@@ -329,7 +417,6 @@ class VideoService:
         )
 
         if video_path.exists():
-
             video_path.unlink()
 
         db.delete(video)
