@@ -95,15 +95,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video, onDelete }) => {
       {/* Action Footer */}
       <div className="px-4 py-3 bg-slate-900/60 border-t border-white/5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate(`/chat?videoId=${video.id}`)}
-            className="text-xs text-brand-300 hover:text-brand-200"
-            leftIcon={<MessageSquare className="w-3.5 h-3.5" />}
-          >
-            Ask AI
-          </Button>
+
           <Button
             variant="ghost"
             size="sm"

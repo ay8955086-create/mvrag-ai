@@ -33,7 +33,6 @@ export const Sidebar: React.FC = () => {
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'Upload Video', path: '/upload', icon: UploadCloud },
     { name: 'Video Library', path: '/videos', icon: Video },
-    { name: 'AI Chat', path: '/chat', icon: Bot, badge: 'RAG' },
     { name: 'Semantic Search', path: '/search', icon: Search },
     { name: 'Analytics', path: '/analytics', icon: BarChart3 },
     { name: 'Query History', path: '/history', icon: History },
@@ -106,11 +105,7 @@ export const Sidebar: React.FC = () => {
                   {!isCollapsed && (
                     <span className="truncate flex-1">{item.name}</span>
                   )}
-                  {!isCollapsed && item.badge && (
-                    <span className="px-1.5 py-0.5 text-[9px] font-bold tracking-wider rounded-md bg-brand-500/20 text-brand-300 border border-brand-500/30 uppercase">
-                      {item.badge}
-                    </span>
-                  )}
+
                 </NavLink>
               );
             })}

@@ -63,16 +63,7 @@ export const ProcessingStatus: React.FC = () => {
             >
               Refresh Status
             </Button>
-            {isCompleted && (
-              <Button
-                size="sm"
-                onClick={() => navigate(`/chat?videoId=${video.id}`)}
-                leftIcon={<Bot className="w-4 h-4 text-white" />}
-                className="shadow-lg shadow-brand-500/20"
-              >
-                Ask AI Questions
-              </Button>
-            )}
+
           </div>
         </div>
       </Card>

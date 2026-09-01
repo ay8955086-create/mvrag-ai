@@ -9,7 +9,6 @@ export const Breadcrumb: React.FC = () => {
   const routeNameMap: Record<string, string> = {
     upload: 'Upload Video',
     videos: 'Video Library',
-    chat: 'AI Chat',
     search: 'Semantic Search',
     analytics: 'Analytics',
     history: 'Query History',

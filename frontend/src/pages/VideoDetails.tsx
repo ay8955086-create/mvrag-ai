@@ -89,13 +89,7 @@ export const VideoDetails: React.FC = () => {
           </div>
         </div>
 
-        <Button
-          onClick={() => navigate(`/chat?videoId=${details.id}`)}
-          leftIcon={<Bot className="w-4 h-4 text-white" />}
-          className="shadow-xl shadow-brand-500/25"
-        >
-          Ask AI About This Video
-        </Button>
+
       </div>
 
       {/* Main Grid: Player + Inspector Tabs */}

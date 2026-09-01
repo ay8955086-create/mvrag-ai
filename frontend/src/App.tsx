@@ -13,7 +13,6 @@ import { UploadVideo } from './pages/UploadVideo';
 import { ProcessingStatus } from './pages/ProcessingStatus';
 import { VideoLibrary } from './pages/VideoLibrary';
 import { VideoDetails } from './pages/VideoDetails';
-import { AIChat } from './pages/AIChat';
 import { Search } from './pages/Search';
 import { Analytics } from './pages/Analytics';
 import { History } from './pages/History';
@@ -51,7 +50,6 @@ export const App: React.FC = () => {
                 <Route path="/processing/:id" element={<ProcessingStatus />} />
                 <Route path="/videos" element={<VideoLibrary />} />
                 <Route path="/videos/:id" element={<VideoDetails />} />
-                <Route path="/chat" element={<AIChat />} />
                 <Route path="/search" element={<Search />} />
                 <Route path="/analytics" element={<Analytics />} />
                 <Route path="/history" element={<History />} />

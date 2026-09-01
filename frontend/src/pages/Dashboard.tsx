@@ -59,14 +59,7 @@ export const Dashboard: React.FC = () => {
             >
               Upload Video
             </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              onClick={() => navigate('/chat')}
-              leftIcon={<Sparkles className="w-5 h-5 text-brand-400" />}
-            >
-              Open AI Chat
-            </Button>
+
           </div>
         </div>
       </div>

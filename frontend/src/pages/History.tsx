@@ -96,8 +96,6 @@ export const History: React.FC = () => {
         <Card glass className="p-12 text-center space-y-4">
           <HistoryIcon className="w-8 h-8 text-slate-500 mx-auto" />
           <h3 className="text-sm font-bold text-slate-200">No Query History Found</h3>
-          <p className="text-xs text-slate-400">Ask questions in the AI Chat to populate your query log.</p>
-          <Button size="sm" onClick={() => navigate('/chat')}>Open AI Chat</Button>
         </Card>
       ) : (
         <div className="space-y-4">

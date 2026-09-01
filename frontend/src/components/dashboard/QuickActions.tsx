@@ -15,13 +15,6 @@ export const QuickActions: React.FC = () => {
       color: 'from-brand-600 to-indigo-600',
     },
     {
-      title: 'Multimodal AI Chat',
-      desc: 'Ask questions with auto vector retrieval & timestamp links',
-      icon: Bot,
-      path: '/chat',
-      color: 'from-indigo-600 to-cyan-600',
-    },
-    {
       title: 'Semantic Video Search',
       desc: 'Search across speech, OCR text, and visual captions',
       icon: Search,
