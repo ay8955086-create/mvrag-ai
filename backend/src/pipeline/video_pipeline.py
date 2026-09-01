@@ -466,7 +466,9 @@ class VideoPipeline:
 
         return chunks
 
-    # ==========================================================
+
+
+        # ==========================================================
     # Embedding Generation + ChromaDB
     # ==========================================================
 
@@ -479,16 +481,12 @@ class VideoPipeline:
         them in ChromaDB.
         """
 
-        logger.info(
-            "Embedding generation started."
-        )
+        logger.info("Embedding generation started.")
 
         if not chunks:
-
             logger.warning(
                 "No chunks available for embedding."
             )
-
             return chunks
 
         # ------------------------------------------------------
@@ -517,20 +515,34 @@ class VideoPipeline:
         )
 
         if len(embeddings) != len(chunks):
-
             raise RuntimeError(
                 "Number of generated embeddings does not "
                 "match number of chunks."
             )
 
+        logger.info(
+            "Generated %d embeddings.",
+            len(embeddings),
+        )
+
         # ------------------------------------------------------
-        # Generate IDs
+        # Generate deterministic IDs
         # ------------------------------------------------------
 
         embedding_ids = [
-            str(uuid4())
-            for _ in chunks
+            f"video_{self.video_id}_chunk_{chunk.chunk_index}"
+            for chunk in chunks
         ]
+
+        # ------------------------------------------------------
+        # Store ID on EVERY chunk
+        # ------------------------------------------------------
+
+        for chunk, embedding_id in zip(
+            chunks,
+            embedding_ids,
+        ):
+            chunk.embedding_id = embedding_id
 
         # ------------------------------------------------------
         # Prepare documents
@@ -547,9 +559,7 @@ class VideoPipeline:
 
         metadatas = [
             {
-                "video_id": int(self.video_id)
-                if self.video_id is not None
-                else 0,
+                "video_id": int(self.video_id),
                 "chunk_index": chunk.chunk_index,
                 "start_time": float(chunk.start_time),
                 "end_time": float(chunk.end_time),
@@ -558,7 +568,7 @@ class VideoPipeline:
         ]
 
         # ------------------------------------------------------
-        # Batch ChromaDB insertion
+        # Store embeddings in ChromaDB
         # ------------------------------------------------------
 
         logger.info(
@@ -572,22 +582,6 @@ class VideoPipeline:
             metadatas=metadatas,
         )
 
-        # ------------------------------------------------------
-        # Store IDs on chunks
-        # ------------------------------------------------------
-
-        for chunk, embedding_id in zip(
-            chunks,
-            embedding_ids,
-        ):
-
-            if hasattr(
-                chunk,
-                "embedding_id",
-            ):
-
-                chunk.embedding_id = embedding_id
-
         logger.info(
             "Stored %d embeddings in ChromaDB.",
             len(chunks),
@@ -598,7 +592,6 @@ class VideoPipeline:
         )
 
         return chunks
-
     # ==========================================================
     # Database Persistence
     # ==========================================================

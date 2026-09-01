@@ -69,7 +69,7 @@ class ChromaStore:
             len(ids),
         )
 
-        self.collection.add(
+        self.collection.upsert(
             ids=ids,
             embeddings=embeddings,
             documents=documents,

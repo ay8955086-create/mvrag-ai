@@ -23,32 +23,37 @@ class WhisperTranscriber:
         logger.info("Loading Whisper model: %s", settings.WHISPER_MODEL)
         self.model = whisper.load_model(settings.WHISPER_MODEL)
 
-    def transcribe(self, audio_path: str | Path):
-        """
-        Transcribe an audio file.
+    def transcribe(
+        self,
+        audio_path: str | Path,
+    ):
 
-        Parameters
-        ----------
-        audio_path : str | Path
-
-        Returns
-        -------
-        dict
-        """
 
         audio_path = Path(audio_path)
 
         if not audio_path.exists():
-            raise FileNotFoundError(audio_path)
+           raise FileNotFoundError(audio_path)
 
-        logger.info("Transcribing %s", audio_path.name)
+        logger.info(
+          "Transcribing %s",
+           audio_path.name,
+        )
 
         result = self.model.transcribe(
-    str(audio_path),
-    fp16=False,
-    verbose=False,
-)
+            str(audio_path),
+            language="en",
+            task="transcribe",
+            fp16=False,
+            verbose=False,
+        )
 
-        logger.info("Transcription completed.")
+        logger.info(
+            "Transcription completed."
+        )
+
+        logger.info(
+           "Detected Language: %s",
+            result.get("language", "unknown"),
+        )
 
         return result
