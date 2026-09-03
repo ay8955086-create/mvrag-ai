@@ -9,14 +9,14 @@ router = APIRouter(
     tags=["Query"],
 )
 
-service = QueryService()
-
 
 @router.post(
     "",
     response_model=APIResponse,
 )
 def query(request: QueryRequest):
+    service = QueryService()
+
     result = service.ask(
         question=request.question,
         video_id=request.video_id,
