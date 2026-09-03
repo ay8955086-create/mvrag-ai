@@ -69,7 +69,6 @@ class VideoService:
         # ======================================================
 
         if not file.filename:
-
             raise HTTPException(
                 status_code=400,
                 detail="Video filename is required.",
@@ -82,7 +81,6 @@ class VideoService:
         )
 
         if extension not in VideoService.ALLOWED_EXTENSIONS:
-
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -114,18 +112,13 @@ class VideoService:
         # ======================================================
 
         try:
-
-            with save_path.open(
-                "wb"
-            ) as buffer:
-
+            with save_path.open("wb") as buffer:
                 shutil.copyfileobj(
                     file.file,
                     buffer,
                 )
 
         except Exception:
-
             logger.exception(
                 "Failed to save uploaded video."
             )
@@ -145,7 +138,6 @@ class VideoService:
         normalized_path = None
 
         try:
-
             logger.info(
                 "Normalizing uploaded video for "
                 "browser playback."
@@ -173,13 +165,11 @@ class VideoService:
             )
 
         except Exception:
-
             logger.exception(
                 "Failed to normalize uploaded video."
             )
 
             if normalized_path is not None:
-
                 if normalized_path.exists():
                     normalized_path.unlink()
 
@@ -199,13 +189,11 @@ class VideoService:
         # ======================================================
 
         try:
-
             metadata = extract_video_metadata(
                 str(save_path)
             )
 
         except Exception:
-
             logger.exception(
                 "Failed to extract video metadata."
             )
@@ -254,7 +242,6 @@ class VideoService:
         # ======================================================
 
         if background_tasks is None:
-
             logger.warning(
                 "BackgroundTasks was not provided. "
                 "Video %d will remain in Processing state.",
@@ -262,13 +249,13 @@ class VideoService:
             )
 
         else:
+            from src.services.background_service import BackgroundService
 
-    from src.services.background_service import BackgroundService
+            background_tasks.add_task(
+                BackgroundService.process_video,
+                video.id,
+            )
 
-    background_tasks.add_task(
-        BackgroundService.process_video,
-        video.id,
-    )
             logger.info(
                 "Background AI processing scheduled "
                 "for video %d.",
@@ -324,7 +311,6 @@ class VideoService:
         )
 
         if video is None:
-
             raise HTTPException(
                 status_code=404,
                 detail="Video not found.",
@@ -376,7 +362,6 @@ class VideoService:
         )
 
         if video is None:
-
             raise HTTPException(
                 status_code=404,
                 detail="Video not found.",
@@ -403,7 +388,6 @@ class VideoService:
         )
 
         if video is None:
-
             raise HTTPException(
                 status_code=404,
                 detail="Video not found.",
