@@ -27,9 +27,6 @@ from src.models.video import Video
 from src.processors.video_normalizer import (
     VideoNormalizer,
 )
-from src.services.background_service import (
-    BackgroundService,
-)
 from src.utils.video_metadata import (
     extract_video_metadata,
 )
@@ -266,11 +263,12 @@ class VideoService:
 
         else:
 
-            background_tasks.add_task(
-                BackgroundService.process_video,
-                video.id,
-            )
+    from src.services.background_service import BackgroundService
 
+    background_tasks.add_task(
+        BackgroundService.process_video,
+        video.id,
+    )
             logger.info(
                 "Background AI processing scheduled "
                 "for video %d.",
