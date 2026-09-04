@@ -6,8 +6,6 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from sentence_transformers import SentenceTransformer
-
 from src.config.settings import settings
 from src.core.logger import get_logger
 
@@ -15,10 +13,11 @@ logger = get_logger(__name__)
 
 
 @lru_cache(maxsize=1)
-def get_embedding_model() -> SentenceTransformer:
+def get_embedding_model():
     """
     Load the embedding model once and reuse it.
     """
+    from sentence_transformers import SentenceTransformer
 
     logger.info(
         "Loading embedding model: %s",
@@ -42,7 +41,6 @@ class EmbeddingGenerator:
     """
 
     def __init__(self):
-
         self.model = get_embedding_model()
 
     def generate_embedding(

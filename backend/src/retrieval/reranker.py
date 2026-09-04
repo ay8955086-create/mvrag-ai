@@ -8,18 +8,19 @@ from __future__ import annotations
 
 import math
 
-from sentence_transformers import CrossEncoder
+
 
 from src.config.settings import settings
 from src.core.logger import get_logger
 
 logger = get_logger(__name__)
 
-
 class Reranker:
     """Reranks retrieved multimodal chunks."""
 
     def __init__(self):
+        from sentence_transformers import CrossEncoder
+
         logger.info(
             "Loading reranker model: %s",
             settings.RERANKER_MODEL,
@@ -60,8 +61,6 @@ class Reranker:
         results = []
 
         for document, score, item_metadata, distance, embedding_id in ranked[:top_k]:
-            # CrossEncoder scores are logits. Convert them to a stable
-            # 0..1 relevance value for the frontend.
             logit = float(score)
             relevance = 1.0 / (1.0 + math.exp(-max(-60.0, min(60.0, logit))))
 
